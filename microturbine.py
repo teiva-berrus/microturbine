@@ -10,11 +10,13 @@ INTAKE_PRES = 1E5           # in Pa
 AIR_MASS_FLOW = 20          # in g/s
 HYDROGEN_MASS_FLOW = 0.097  #in g/s
 RICHESSE = (1/0.42)/((AIR_MASS_FLOW/29)/(HYDROGEN_MASS_FLOW/2))
+ETA_C = 0.66
+ETA_T = 0.73
 
 print("Richesse : " + str(round(RICHESSE,2)))
 GAMMA = 1.4
 gas = ct.Solution('gri30.yaml')
-gas.TPX = INTAKE_TEMP, INTAKE_PRES, 'N2:{0}, O2:{1}'.format(0.8,0.2)
+gas.TPX = INTAKE_TEMP, INTAKE_PRES, 'N2:0.79, O2:0.21'
 INTAKE_ENTALPY = gas.h
 
 pressure = [INTAKE_PRES]
@@ -26,28 +28,20 @@ DISCRETISATION = 50        # number of step in each part of engine
 """ Compressor """
 
 COMPRESSION_RATIO = 3
-for i in range (DISCRETISATION):
-    pressure.append(pressure[0]*(1+COMPRESSION_RATIO*(i+1)/DISCRETISATION))
-    temperature.append(temperature[i]*(pressure[i]/pressure[i+1])**((1-GAMMA)/GAMMA))
-    gas.TP = temperature[i], pressure[i]
-    enthalpy.append(gas.h)
-    entropy.append(gas.s)
-P3 = pressure[-1]
-T3_IS = temperature[-1]
-H3_IS = enthalpy[-1]
 
+P3 = COMPRESSION_RATIO*INTAKE_PRES
+T3_IS = INTAKE_TEMP*(COMPRESSION_RATIO**((1-GAMMA)/GAMMA)
+T3 = INTAKE_TEMP + (T3_IS-INTAKE_TEMP)/ETA_C
+gas.TP = T3,P3
+H3 = gas.h
 
 plt.plot(entropy, enthalpy)
-
+print(T3_IS)
 print("Compressor outlet pressure = " + str(P3*1E-5) + " bar")
-gas.TP = T3_IS,P3
 
-COMPRESSION_POWER_ISENTROPIC = (gas.h - INTAKE_ENTALPY)*AIR_MASS_FLOW*1E-3
-COMPRESSION_POWER = COMPRESSION_POWER_ISENTROPIC/0.66
-print("Compression power isentropic= " + str(int(COMPRESSION_POWER_ISENTROPIC)) + " W")
+
+COMPRESSION_POWER = (gas.h - INTAKE_ENTALPY)*AIR_MASS_FLOW*1E-3
 print("Compression power = " + str(int(COMPRESSION_POWER)) + " W")
-T3 = INTAKE_TEMP+COMPRESSION_POWER/(gas.cp*AIR_MASS_FLOW*1E-3)
-print("Compressor outlet temperature (isentropic) = " + str(int(T3_IS)) + " K")
 print("Compressor outlet temperature = " + str(int(T3)) + " K")
 gas.TP = T3,P3
 
@@ -67,7 +61,7 @@ pressure.append(P4)
 enthalpy.append(H4)
 entropy.append(gas.s)
 
-print("Flamme temperature = " + str(int(T4)) + " K")
+print("Melange temperature = " + str(int(T4)) + " K")
 
 
 """ Turbine """

@@ -8,7 +8,7 @@ PHI = 0.17
 T4_stab = [1000]
 P0 = 100000
 GAMMA = 1.4
-T4_lim = 1200*(1+0.18)
+T4_lim = 1200
 epsilon_spacing = 0.01
 
 while T4_stab[-1] < T4_lim :
