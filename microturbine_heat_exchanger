@@ -20,7 +20,9 @@ S0 = gas.s
 
 
 
-""" Compressor """
+##################
+#   Compressor
+##################
 
 COMPRESSION_RATIO = 3
 P3 = P0*COMPRESSION_RATIO
@@ -60,9 +62,10 @@ gas.TP = T5_IS,P5
 H5_IS = gas.h
 
 # heat exchanger
-epsilon = 0.03
+epsilon = 0.037
 EPSILON_SPACING = 0.02
 T4_stab_list = [T4]
+T35_stab_list = []
 T4_LIM = 1200
 
 while T4_stab_list[-1] < T4_LIM :
@@ -89,30 +92,40 @@ while T4_stab_list[-1] < T4_LIM :
         TURBINE_POWER = ISENTROPIC_TURBINE_POWER*TURBINE_EFFICIENCY
         T5 = T4_list[-1] - TURBINE_POWER/(gas.cp*AIR_MASS_FLOW*1E-3)
         T5_list.append(T5)
-        
+
     epsilon += EPSILON_SPACING
     T4_stab_list.append(T4_list[-1])
-    
-T4 = T4_stab_list[-2]
-print("Combustion chamber inlet temperature : " + str(T35_list[-1]))
-print("T4 = " + str(T4))
-gas.TP = T4, P4
+    T35_stab_list.append(T35_list[-1])
 
+print("Epsilon heat exchanger = " + str(epsilon-EPSILON_SPACING))
+
+T35 = T35_stab_list[-2]
+gas2 = ct.Solution('gri30.yaml')
+gas2.TPX = T35, P3, 'N2:0.79, O2:0.21'
+H35 = gas2.h
+S35 = gas2.s
+
+T4 = T4_stab_list[-2]
+gas.TP = T4, P4
 H4 = gas.h
 S4 = gas.s
+
+print("Combustion chamber inlet temperature : " + str(int(T35)) + " K")
+print("T4 = " + str(int(T4)) + " K")
 
 
 
 """ Turbine """
+
 P5 = P0
 T5_IS = T4*(P4/P5)**((1-GAMMA)/GAMMA)
 gas.TP = T5_IS,P5
 H5_IS = gas.h
 
-
 ISENTROPIC_TURBINE_POWER = (H4-H5_IS)*AIR_MASS_FLOW*1E-3
 TURBINE_POWER = ISENTROPIC_TURBINE_POWER*TURBINE_EFFICIENCY
 T5 = T4 - TURBINE_POWER/(gas.cp*AIR_MASS_FLOW*1E-3)
+print("Turbine outlet temperature = " + str(int(T5)) + " K")
 gas.TP = T5,P5
 H5 = gas.h
 S5 = gas.s
@@ -122,10 +135,22 @@ print("Turbine power = " + str(int(TURBINE_POWER)) + " W")
 print("Available power = " + str(int(TURBINE_POWER-COMPRESSION_POWER)) + " W")
 
 
-# efficiency
-THERMAL_POWER = 143E6*HYDROGEN_MASS_FLOW*1E-3
+""" Efficiency """
+
+THERMAL_POWER = 120E6*HYDROGEN_MASS_FLOW*1E-3
 EFFICENCY = (TURBINE_POWER-COMPRESSION_POWER)/THERMAL_POWER
 print("Rendement = " + str(EFFICENCY*100) + " %")
 
-# plt.plot([S0,S3,S4,S5],[H0,H3,H4,H5])
-# plt.show()
+
+""" Profiles (figures) """
+gas()
+plt.plot([S0,S3,S35,S4,S5],[H0,H3,H35,H4,H5])
+p1 = plt.plot([S0,S3],[H0,H3], label='Compression')
+p2 = plt.plot([S3,S35],[H3,H35], label = 'Echangeur')
+p3 = plt.plot([S35,S4],[H35,H4], label = 'Combustion')
+p4 = plt.plot([S4,S5],[H4,H5], label = 'Turbine')
+plt.legend()
+plt.xlabel("Entropie ($J.K^{-1}.kg^{-1}$)")
+plt.ylabel("Enthalpie ($J.kg^{-1}$)")
+plt.show()
+

@@ -57,6 +57,7 @@ print("Isentropic compression power = " + str(int(ISENTROPIC_COMPRESSION_POWER))
 print("Compression power = " + str(int(COMPRESSION_POWER)) + " W")
 
 T3 = T0+COMPRESSION_POWER/(gas.cp*AIR_MASS_FLOW*1E-3)
+T3 = 691
 gas.TP = T3,P3
 print("Compressor outlet temperature (isentropic) = " + str(int(T3_IS)) + " K")
 print("Compressor outlet temperature = " + str(int(T3)) + " K")
@@ -117,6 +118,9 @@ print("Available power = " + str(int(TURBINE_POWER-COMPRESSION_POWER)) + " W")
 print(T5)
 
 # Rendement
-THERMAL_POWER = 143E6*HYDROGEN_MASS_FLOW*1E-3
+THERMAL_POWER = 120E6*HYDROGEN_MASS_FLOW*1E-3
 EFFICENCY = (TURBINE_POWER-COMPRESSION_POWER)/THERMAL_POWER
 print("Rendement = " + str(EFFICENCY*100) + " %")
+
+print(gas.Y[gas.species_index('H2')])
+print(gas.species_index('H2'))
