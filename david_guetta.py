@@ -1,26 +1,8 @@
-"""
-Mixing two streams.
-
-Since reactors can have multiple inlets and outlets, they can be used to
-implement mixers, splitters, etc. In this example, air and methane are mixed
-in stoichiometric proportions. Due to the low temperature, no reactions occur.
-Note that the air stream and the methane stream use *different* reaction
-mechanisms, with different numbers of species and reactions. When gas flows
-from one reactor or reservoir to another one with a different reaction
-mechanism, species are matched by name. If the upstream reactor contains a
-species that is not present in the downstream reaction mechanism, it will be
-ignored. In general, reaction mechanisms for downstream reactors should
-contain all species that might be present in any upstream reactor.
-
-Compare this approach for the transient problem to the method used for the
-steady-state problem in thermo/mixing.py.
-
-Requires: cantera >= 2.5.0
-Keywords: thermodynamics, reactor network, mixture
-"""
+""" Mixing two streams """
 
 import cantera as ct
-
+import numpy as np
+import matplotlib.pyplot as plt
 # Use air for stream a.
 gas_a = ct.Solution('gri30.yaml')
 gas_a.TPX = 700.0, 3*ct.one_atm, 'O2:0.21, N2:0.79'
@@ -31,6 +13,7 @@ gas_a.TPX = 700.0, 3*ct.one_atm, 'O2:0.21, N2:0.79'
 # to have a pure mixer, with no chemistry, use instead a reaction mechanism
 # for gas_b that has no reactions.
 gas_b = ct.Solution('gri30.yaml')
+gas_b.TP = 700,3E5
 gas_b.set_equivalence_ratio(1,'H2','O2:1,N2:3.76')
 gas_b.equilibrate('HP')
 
@@ -48,13 +31,15 @@ downstream = ct.Reservoir(gas_b)
 # Create a reactor for the mixer. A reactor is required instead of a
 # reservoir, since the state will change with time if the inlet mass flow
 # rates change or if there is chemistry occurring.
-gas_b.TPX = 300.0, ct.one_atm, 'O2:0.21, N2:0.78, AR:0.01'
-mixer = ct.IdealGasReactor(gas_b)
+# gas_a.TPX = 1000.0, ct.one_atm, 'O2:0.21, N2:0.78, AR:0.01'
+gas_c = ct.Solution('gri30.yaml')
+gas_c.TP = 1200,3E5
+mixer = ct.IdealGasReactor(gas_c)
 
 # create two mass flow controllers connecting the upstream reservoirs to the
 # mixer, and set their mass flow rates to values corresponding to
 # stoichiometric combustion.
-mfc1 = ct.MassFlowController(res_a, mixer, mdot=16)
+
 mfc2 = ct.MassFlowController(res_b, mixer, mdot=4)
 
 # connect the mixer to the downstream reservoir with a valve.
@@ -62,9 +47,27 @@ outlet = ct.Valve(mixer, downstream, K=10.0)
 
 sim = ct.ReactorNet([mixer])
 
+
 # Since the mixer is a reactor, we need to integrate in time to reach steady
 # state
-sim.advance_to_steady_state()
+t_max = 20
+n = 3
+dt = t_max/n
+t=0
+temp = []
+time = []
 
+for i in np.arange(0,t_max,3):
+    mfc1 = ct.MassFlowController(res_a, mixer, mdot=0.1)
+    sim = ct.ReactorNet([mixer])
+    for x in np.arange(0,t_max,100):
+        sim.advance(t_max/100)
+        temp.append(mixer.thermo.state.T[0])
+        
+        time.append(t)
+        t+=1
+# 
 # view the state of the gas in the mixer
 print(mixer.thermo.report())
+plt.plot(time,temp)
+plt.show()

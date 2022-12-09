@@ -140,7 +140,7 @@ EFFICENCY = (TURBINE_POWER-COMPRESSION_POWER)/THERMAL_POWER
 print("Rendement = " + str(EFFICENCY*100) + " %")
 
 
-""" Profiles (figures) """
+""" Profiles """
 gas()
 plt.plot([S0,S3,S35,S4,S5],[H0,H3,H35,H4,H5])
 p1 = plt.plot([S0,S3],[H0,H3], label='Compression')

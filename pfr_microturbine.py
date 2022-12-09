@@ -1,155 +1,147 @@
-""" PSF and PFR microturbine """
+""" PSR (Zacharia) and PFR microturbine """
 
 import cantera as ct
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
+
 
 #######################################################################
-# Perfectly Stirred Reactor (PSR)
+#          Perfectly Stirred Reactor (PSR) by Zacharia
 #######################################################################
 
-# Input parameters 
-T_0 = 700  # inlet temperature [K]
-pressure = 3E5  # constant pressure [Pa]
-AIR_MASS_FLOW = 2.5          # in g/s
+COMBUSTION_AIR_MASS_FLOW = 3.33
+AIR_MASS_FLOW = 20-COMBUSTION_AIR_MASS_FLOW      # in g/s
 HYDROGEN_MASS_FLOW = 0.097  #in g/s
-PHI = (1/0.42)/((AIR_MASS_FLOW/29)/(HYDROGEN_MASS_FLOW/2))
-print("PHI : " + str(round(PHI,2)))
+PRODUCTS_MASS_FLOW = COMBUSTION_AIR_MASS_FLOW+HYDROGEN_MASS_FLOW
+PHI = (1/0.42)/((COMBUSTION_AIR_MASS_FLOW/29)/(HYDROGEN_MASS_FLOW/2))
+print("PHI  " + str(PHI))
+print("PRODUCT MASS FLOW  "+str(PRODUCTS_MASS_FLOW))
+gas = ct.Solution('gri30.yaml')
+gas.TP = 700,3e5
+gas.set_equivalence_ratio(PHI, fuel='H2', oxidizer='O2:0.21, N2:0.79')
 
+# r = ct.IdealGasConstPressureReactor(gas)
 
-# Set the gas model with the initial conditions
-gas1 = ct.Solution('gri30.yaml')
-gas1.set_equivalence_ratio(phi = PHI, fuel = 'H2', oxidizer = 'O2: 0.21, N2: 0.79')
-gas1.TP = T_0, pressure
+# sim = ct.ReactorNet([r])
+# sim.verbose = True
 
+# # limit advance when temperature difference is exceeded
+# delta_T_max = 20
+# r.set_advance_limit('temperature', delta_T_max)
 
-# Create the combustor, and fill it initially with a mixture consisting of the equilibrium products
-# Create the inlet and the outlet reservoirs of the combustor
-inlet = ct.Reservoir(gas1)
+# dt_max = 1E-2
+# t_end = 385.19
 
-gas1.equilibrate('HP')
-combustor = ct.IdealGasReactor(gas1)
-combustor.volume = 1.0
+# states = ct.SolutionArray(gas, extra=['t'])
 
-exhaust = ct.Reservoir(gas1)
+# while sim.time < t_end:
+#     if sim.time < 380:
+#         dt_max = 1
+#     else:
+#         dt_max = 1E-2
+#     sim.advance(sim.time + dt_max)
+#     states.append(r.thermo.state, t=sim.time*1e3)
 
+# plt.clf()
 
-# Use a variable mass flow rate to keep the residence time constant in the reactor
-# The master flow controler is installed in the inlet of the combustor (MassFlowController)
-# and the corresponding flow controler is installed in the outlet of the reactor (PressureControler)
-def mdot(t):
-    return combustor.mass / residence_time      #residence time = mass / mass_flow_rate
+# plt.subplot(2, 2, 1)
+# plt.plot(states.t, states.T)
+# plt.xlabel('Time (ms)')
+# plt.ylabel('Temperature (K)')
 
-inlet_mfc = ct.MassFlowController(inlet, combustor, mdot=mdot)
-outlet_mfc = ct.PressureController(combustor, exhaust, master=inlet_mfc, K=0.01)
+# plt.subplot(2, 2, 2)
+# plt.plot(states.t, states.X[:, gas.species_index('CO2')])
+# plt.xlabel('Time (ms)')
+# plt.ylabel('CO2 Mole Fraction')
 
+# plt.subplot(2, 2, 3)
+# plt.plot(states.t, states.X[:, gas.species_index('NO2')])
+# plt.xlabel('Time (ms)')
+# plt.ylabel('NO2 Mole Fraction')
 
-# The simulation only contains one reactor
-sim = ct.ReactorNet([combustor])
+# plt.subplot(2, 2, 4)
+# plt.plot(states.t, states.X[:, gas.species_index('NO')])
+# plt.xlabel('Time (ms)')
+# plt.ylabel('NO Mole Fraction')
 
-
-# Run a loop over decreasing residence times, until the reactor is extinguished, saving the state after each iteration
-states = ct.SolutionArray(gas1, extra=['tres'])
-
-residence_time = 0.1
-while combustor.T > 700:
-    sim.set_initial_time(0.0)  # reset the integrator
-    sim.advance_to_steady_state()
-    print('tres = {:.2e}; T = {:.1f}'.format(residence_time, combustor.T))
-    states.append(combustor.thermo.state, tres=residence_time)
-    residence_time *= 0.9  # decrease the residence time for the next iteration
-
-# Plot results
-# plt.plot(states.tres[:-1], states.T[:-1], '.-', color='C1')
-# plt.xlabel('residence time [s]')
-# plt.ylabel('temperature [K]')
+# plt.tight_layout()
 # plt.show()
 
-f, ax1 = plt.subplots(1, 1)
-ax1.plot(states.tres, states.heat_release_rate, '.-', color='C0')
-ax2 = ax1.twinx()
-ax2.plot(states.tres[:-1], states.T[:-1], '.-', color='C1')
-ax1.set_xlabel('residence time [s]')
-ax1.set_ylabel('heat release rate [W/m$^3$]', color='C0')
-ax2.set_ylabel('temperature [K]', color='C1')
-f.tight_layout()
-plt.show()
+
+""" Equilibrate instead of PSR in follows """
+gas.equilibrate('HP')
+
 
 #######################################################################
-# Plug Flow Reactor (PFR)
+#                    Plug Flow Reactor (PFR)
 #######################################################################
 
- # input parameters
-T_0 = states.T[0]  # inlet temperature [K]
-pressure = states.P[0]  # constant pressure [Pa]
-gas1.TP = T_0, pressure
+gas1 = gas
+gas2 = ct.Solution('gri30.yaml')
+gas2.TPX = 700.0, 3*ct.one_atm, 'O2:0.21, N2:0.79'
 
-length = 1  # approximate PFR length [m]
-PRODUCTS_MASS_FLOW = 20 - AIR_MASS_FLOW
-area = 314e-6  # cross-sectional area [m**2]
-u_0 = PRODUCTS_MASS_FLOW / (1*area) # inflow velocity [m/s]
+length = 0.05  # approximate PFR length [m]
+area = 7.065e-4  # cross-sectional area [m**2]
+#PRODUCTS_MASS_FLOW = 1
+#AIR_MASS_FLOW = 19
+u_0 = PRODUCTS_MASS_FLOW*E-3 / (gas1.density*area) # inflow velocity [m/s]
+print(u_0)
+
+res_a = ct.Reservoir(gas1)
+res_b = ct.Reservoir(gas2)
+
+downstream = ct.Reservoir(gas1)
+mixer = ct.IdealGasReactor(gas1)
+
+mfc1 = ct.MassFlowController(res_a, mixer, mdot=PRODUCTS_MASS_FLOW)
+mfc2 = ct.MassFlowController(res_b, mixer, mdot=AIR_MASS_FLOW)
+
+outlet = ct.Valve(mixer, downstream, K=10.0)
+
+sim = ct.ReactorNet([mixer])
 
 
-# input file containing the reaction mechanism
-# reaction_mechanism = 'gri30.yaml'
+""" One PFR by Cantera """
+# n_steps = 2000
+# t_total = length/u_0
+# dt = t_total / n_steps
 
-# Resolution: The PFR will be simulated by 'n_steps' time steps or by a chain
-# of 'n_steps' stirred reactors.
-n_steps = 2000
+# t = (np.arange(n_steps)+1) * dt
+# z = np.zeros_like(t)
+# u = np.zeros_like(t)
 
+# states = ct.SolutionArray(gas,extra=['space'])
 
-# # import the gas model and set the initial conditions
-# gas1 = ct.Solution(reaction_mechanism)
-# gas1.set_equivalence_ratio(phi = PHI, fuel = 'H2', oxidizer = 'O2: 0.21, N2: 0.79')
-# gas1.TP = T_0, pressure
-# mass_flow_rate1 = u_0 * gas1.density * area
-
-
-# create a new reactor
-reactor = ct.IdealGasConstPressureReactor(gas1)
-
-# create a reactor network for performing time integration
-sim = ct.ReactorNet([reactor])
-
-# approximate a time step to achieve a similar resolution as in the next method
-# t_total = length / u_0
-t_total = 10
-dt = t_total / n_steps
-
-# define time, space, and other information vectors
-t = (np.arange(n_steps) + 1) * dt
-z = np.zeros_like(t)
-u = np.zeros_like(t)
-states = ct.SolutionArray(reactor.thermo)
-# for n, t_i in enumerate(t):
-#     # perform time integration
-#     simadvance(t_i)
+# for n,t_i in enumerate(t):
+#     sim.advance(t_i)
 #     # compute velocity and transform into space
-#     u[n] = mass_flow_rate1/ area / reactor.thermo.density
+#     u[n] = PRODUCTS_MASS_FLOW*10E-3 / (mixer.thermo.density*area)
 #     z[n] = z[n - 1] + u[n] * dt
-#     states.append(reactor.thermo.state)
+#     states.append(mixer.thermo.state,space=z[n])
 
 
+plt.clf()
 
+plt.subplot(2, 2, 1)
+plt.plot(states.space, states.T)
+plt.xlabel('Space [m]')
+plt.ylabel('Temperature (K)')
 
+plt.subplot(2, 2, 2)
+plt.plot(states.space, states.X[:, gas1.species_index('CO2')])
+plt.xlabel('Space [m]')
+plt.ylabel('CO2 Mole Fraction')
 
-# # results
-# plt.figure()
-# plt.plot(z1, states1.T, label='Lagrangian Particle')
-# plt.xlabel('$z$ [m]')
-# plt.ylabel('$T$ [K]')
-# plt.legend(loc=0)
-# plt.show()
-# #plt.savefig('pfr_T_z.png')
+plt.subplot(2, 2, 3)
+plt.plot(states.space, states.X[:, gas1.species_index('NO2')])
+plt.xlabel('Space [m]')
+plt.ylabel('NO2 Mole Fraction')
 
-# plt.figure()
-# plt.plot(t1, states1.X[:, gas1.species_index('H2')], label='H2')
-# plt.plot(t1, states1.X[:, gas1.species_index('H2O')], label='H2O')
-# plt.plot(t1, states1.X[:, gas1.species_index('O2')], label='O2')
-# plt.plot(t1, states1.X[:, gas1.species_index('NO2')], label='NO2')
-# plt.plot(t1, states1.X[:, gas1.species_index('N2')], label='N2')
-# plt.xlabel('$t$ [s]')
-# plt.ylabel('$X_{H_2}$ [-]')
-# plt.legend(loc=0)
-# plt.show()
-# #plt.savefig('pfr_XH2_t.png')
+plt.subplot(2, 2, 4)
+plt.plot(states.space, states.X[:, gas1.species_index('NO')])
+plt.xlabel('Space [m]')
+plt.ylabel('NO Mole Fraction')
+
+plt.tight_layout()
+plt.show()
