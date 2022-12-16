@@ -1,4 +1,4 @@
-""" Complete microturbine (old version) """
+""" Microturbine without heat exchanger """
 
 import cantera as ct
 import numpy as np

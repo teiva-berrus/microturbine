@@ -1,0 +1,21 @@
+""" A single PFR by Cantera """
+gas = ...
+reactor = ct.IdealGasConstPressureReactor(gas)
+sim = ct.ReactorNet([reactor])
+
+N_STEPS = 2000
+t_total = LENGTH/u_0
+dt = t_total / N_STEPS
+
+t = (np.arange(N_STEPS)+1) * dt
+z = np.zeros_like(t)
+u = np.zeros_like(t)
+
+states = ct.SolutionArray(gas,extra=['space'])
+
+for n,t_i in enumerate(t):
+    sim.advance(t_i)
+    # compute velocity and transform into space
+    u[n] = (PRODUCTS_MASS_FLOW+AIR_MASS_FLOW/2)*1E-3 / (r1.thermo.density*AREA)
+    z[n] = z[n - 1] + u[n] * dt
+    states.append(r1.thermo.state,space=z[n])

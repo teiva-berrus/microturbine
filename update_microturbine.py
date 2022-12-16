@@ -1,9 +1,8 @@
-""" PSR (Zacharia) and PFR microturbine """
+""" PSR and PFRs microturbine """
 
 import cantera as ct
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
 
 
 #######################################################################
@@ -81,12 +80,12 @@ gas1 = gas
 gas2 = ct.Solution('gri30.yaml')
 gas2.TPX = 700.0, 3*ct.one_atm, 'O2:0.21, N2:0.79'
 
-length = 0.05  # approximate PFR length [m]
+
+length = 0.1  # approximate PFR length [m]
 area = 7.065e-4  # cross-sectional area [m**2]
-#PRODUCTS_MASS_FLOW = 1
-#AIR_MASS_FLOW = 19
-u_0 = PRODUCTS_MASS_FLOW*E-3 / (gas1.density*area) # inflow velocity [m/s]
-print(u_0)
+
+u_0 = PRODUCTS_MASS_FLOW*1E-3 / (gas1.density*area) # inflow velocity [m/s]
+
 
 res_a = ct.Reservoir(gas1)
 res_b = ct.Reservoir(gas2)
@@ -95,30 +94,40 @@ downstream = ct.Reservoir(gas1)
 mixer = ct.IdealGasReactor(gas1)
 
 mfc1 = ct.MassFlowController(res_a, mixer, mdot=PRODUCTS_MASS_FLOW)
-mfc2 = ct.MassFlowController(res_b, mixer, mdot=AIR_MASS_FLOW)
+mfc2 = ct.MassFlowController(res_b, mixer, mdot=AIR_MASS_FLOW/2)
 
 outlet = ct.Valve(mixer, downstream, K=10.0)
 
 sim = ct.ReactorNet([mixer])
 
 
+
+# create a new reactor
+r1 = ct.IdealGasConstPressureReactor(gas)
+# create a reactor network for performing time integration
+sim = ct.ReactorNet([r1])
+
+
+
 """ One PFR by Cantera """
-# n_steps = 2000
-# t_total = length/u_0
-# dt = t_total / n_steps
+n_steps = 2000
+t_total = length/u_0
+dt = t_total / n_steps
 
-# t = (np.arange(n_steps)+1) * dt
-# z = np.zeros_like(t)
-# u = np.zeros_like(t)
+t = (np.arange(n_steps)+1) * dt
+z = np.zeros_like(t)
+u = np.zeros_like(t)
 
-# states = ct.SolutionArray(gas,extra=['space'])
+states = ct.SolutionArray(gas,extra=['space'])
 
-# for n,t_i in enumerate(t):
-#     sim.advance(t_i)
-#     # compute velocity and transform into space
-#     u[n] = PRODUCTS_MASS_FLOW*10E-3 / (mixer.thermo.density*area)
-#     z[n] = z[n - 1] + u[n] * dt
-#     states.append(mixer.thermo.state,space=z[n])
+for n,t_i in enumerate(t):
+    sim.advance(t_i)
+    # compute velocity and transform into space
+    u[n] = (PRODUCTS_MASS_FLOW+AIR_MASS_FLOW/2)*1E-3 / (r1.thermo.density*area)
+    z[n] = z[n - 1] + u[n] * dt
+    states.append(r1.thermo.state,space=z[n])
+
+
 
 
 plt.clf()
