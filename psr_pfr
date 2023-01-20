@@ -1,0 +1,150 @@
+import cantera as ct
+import numpy as np
+import matplotlib.pyplot as plt
+
+# input parameters
+AIR_MASS_FLOW = 20E-3                                               # in kg/s, total air mass flow
+COMBUSTION_AIR_MASS_FLOW = 3.33E-3                                  # in kg/s, air mass flow used in the PSR
+DILUTION_AIR_MASS_FLOW = AIR_MASS_FLOW - COMBUSTION_AIR_MASS_FLOW   # in kg/s, air mass flow used for dilution in PFRs
+HYDROGEN_MASS_FLOW = 0.097E-3                                       # in kg/s
+PRODUCTS_MASS_FLOW = COMBUSTION_AIR_MASS_FLOW + HYDROGEN_MASS_FLOW  # in kg/s
+
+PHI = (1/0.42)/((COMBUSTION_AIR_MASS_FLOW/29)/(HYDROGEN_MASS_FLOW/2))
+print("PHI  " + str(PHI))
+
+# initialixe the unburnt gas
+gas = ct.Solution('gri30.yaml')
+gas.TP = 690, 3e5                                                     
+gas.set_equivalence_ratio(PHI, fuel='H2', oxidizer='O2:1, N2:3.76')
+
+# equilibrate instead of a PSR
+gas.equilibrate('HP')
+print(gas.T)
+
+T_tab = [gas.T, gas.T]
+ino = gas.species_index('NO')
+NO_tab = [gas.Y[ino]*PRODUCTS_MASS_FLOW, gas.Y[ino]*PRODUCTS_MASS_FLOW]
+length_0 = 0.005
+x_tab = [0.,length_0]
+
+
+""" first mixing """
+# stream A = burnt gas
+A = ct.Quantity(gas, constant='HP')
+A.TP = gas.T, gas.P
+A.mass = PRODUCTS_MASS_FLOW
+
+# stream B = air for first dilution
+B = ct.Quantity(gas, constant='HP')
+B.TPX = 690, 3*ct.one_atm, 'O2:1.0, N2:3.76'
+B.mass = DILUTION_AIR_MASS_FLOW /2
+
+# compute the first mixed state 
+M_1 = A + B
+print(M_1.T)
+
+T_tab.append(M_1.T)
+mass_flow_rate_1 = PRODUCTS_MASS_FLOW + DILUTION_AIR_MASS_FLOW/2
+NO_tab.append(M_1.Y[ino]*mass_flow_rate_1)
+x_tab.append(length_0)
+
+
+""" first PFR """
+# input parameters
+length = 50E-3 - length_0
+area = 7.065E-4
+n_steps = 2000
+u_1 =  mass_flow_rate_1 / area / M_1.density 
+
+
+# first PFR
+r_1 = ct.IdealGasConstPressureReactor(gas)
+sim_1 = ct.ReactorNet([r_1])
+
+t_total = (length/3) / u_1
+dt = t_total / n_steps
+
+t_1 = (np.arange(n_steps) + 1) * dt
+x_1 = np.zeros_like(t_1)
+u_1 = np.zeros_like(t_1)
+
+states_1 = ct.SolutionArray(r_1.thermo)
+
+for n_1, t_i in enumerate(t_1):
+    sim_1.advance(t_i)
+    u_1[n_1] = mass_flow_rate_1 / area / r_1.thermo.density
+    x_1[n_1] = x_1[n_1 - 1] + u_1[n_1] * dt
+    states_1.append(r_1.thermo.state)
+
+    T_tab.append(r_1.thermo.T)
+    NO_tab.append(r_1.thermo.Y[ino]*mass_flow_rate_1)
+    x_tab.append(x_1[n_1] + length_0)
+
+plt.figure()
+plt.plot(x_1, states_1.T)
+plt.xlabel('$x$ [m]')
+plt.ylabel('$T$ [K]')
+plt.show()
+
+
+""" second mixing """
+# stream A = exhaust from the first PFR
+C = ct.Quantity(gas, constant='HP')
+C.TP = r_1.thermo.T, r_1.thermo.P
+C.mass = mass_flow_rate_1
+
+# stream B = air for first dilution
+B = ct.Quantity(gas, constant='HP')
+B.TPX = 690, 3*ct.one_atm, 'O2:1.0, N2:3.76'
+B.mass = DILUTION_AIR_MASS_FLOW /2
+
+# compute the second mixed state = mixed state and air for second dilution
+M_2 = C + B
+print(M_2.T)
+
+T_tab.append(M_2.T)
+mass_flow_rate_2 = mass_flow_rate_1 + DILUTION_AIR_MASS_FLOW/2
+NO_tab.append(M_2.Y[ino]*mass_flow_rate_2)
+x_tab.append(x_1[n_1] + length_0)
+
+
+""" second PFR """
+u_2 =  mass_flow_rate_2 / area / M_2.density
+r_2 = ct.IdealGasConstPressureReactor(gas)
+sim_2 = ct.ReactorNet([r_2])
+
+t_total = (2*length/3) / u_2
+dt = t_total / n_steps
+
+t_2 = (np.arange(n_steps) + 1) * dt
+x_2 = np.zeros_like(t_2)
+u_2 = np.zeros_like(t_2)
+
+states_2 = ct.SolutionArray(r_2.thermo)
+
+for n_2, t_i in enumerate(t_2):
+    sim_2.advance(t_i)
+    u_2[n_2] = mass_flow_rate_2 / area / r_2.thermo.density
+    x_2[n_2] = x_2[n_2 - 1] + u_2[n_2] * dt
+    states_2.append(r_2.thermo.state)
+    
+    T_tab.append(r_2.thermo.T)
+    NO_tab.append(r_2.thermo.Y[ino]*mass_flow_rate_2)
+    x_tab.append(x_1[n_1] + length_0 + x_2[n_2])
+
+
+plt.plot(x_2, states_2.T)
+plt.xlabel('$x$ [m]')
+plt.ylabel('$T$ [K]')
+plt.show()
+
+fig1 = plt.subplot(1,2,1)
+fig1.plot(x_tab, T_tab)
+plt.xlabel('$x$ [m]')
+plt.ylabel('$T$ [K]')
+
+fig2 = plt.subplot(1,2,2)
+fig2.plot(x_tab, NO_tab)
+plt.xlabel('$x$ [m]')
+plt.ylabel('$NO$ [kg]')
+plt.show()
